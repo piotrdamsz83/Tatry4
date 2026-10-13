@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="pl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tatry"><meta name="theme-color" content="#0f1b2a">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<title>Tatry · Pogoda</title>
+<style>
+:root{--bg:#f2f5f9;--card:#fff;--tx:#14202e;--mu:#64748b;--ac:#1d6fd8;--bar:#cbd5e1;--cl:#6b8fb8;--ln:#e2e8f0}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1b2a;--card:#182739;--tx:#e8eef6;--mu:#93a4b8;--ac:#5aa2ff;--bar:#2a3d54;--cl:#8fb2da;--ln:#243448}}
+*{box-sizing:border-box}html,body{margin:0}
+body{font:16px/1.4 system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--tx);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:2;background:var(--bg);padding:12px 14px 8px;border-bottom:1px solid var(--ln)}
+h1{font-size:20px;margin:0 0 6px}h2{font-size:15px;margin:18px 14px 8px;color:var(--mu);text-transform:uppercase;letter-spacing:.04em}
+#when{font-weight:600;color:var(--ac)}input[type=range]{width:100%;accent-color:var(--ac)}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between}
+button{border:1px solid var(--ln);background:var(--card);color:var(--tx);border-radius:10px;padding:6px 12px;font-size:14px}
+.card{background:var(--card);margin:0 14px 8px;border-radius:14px;padding:12px 14px;box-shadow:0 1px 3px #0001}
+.pk{display:flex;justify-content:space-between;align-items:center}
+.pk b{font-size:16px}.pk small,.sm{color:var(--mu);font-size:13px}
+.t{font-size:28px;font-weight:700}.neg{color:var(--ac)}
+.badge{display:inline-block;font-size:12px;border-radius:8px;padding:1px 7px;background:var(--bar);margin-left:6px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.grid div{background:var(--bg);border-radius:10px;padding:8px 4px}.grid b{display:block;font-size:20px}
+.bar{height:8px;border-radius:4px;background:var(--bar);overflow:hidden;flex:1}.bar i{display:block;height:100%;background:var(--cl)}
+.lv{display:grid;grid-template-columns:62px 52px 1fr 40px;gap:8px;align-items:center;padding:5px 0;border-top:1px solid var(--ln);font-size:14px}
+.lv:first-of-type{border:0}.ty{padding:6px 0;border-top:1px solid var(--ln)}.ty:first-child{border:0}
+.ev{display:flex;gap:10px;align-items:flex-start}.ev .sc{min-width:54px;text-align:center;border-radius:12px;padding:6px 0;color:#fff;font-weight:700;font-size:20px}.ev .sc small{display:block;font-size:11px;font-weight:500}
+.top{border:2px solid #f59f00}select{font-size:15px;padding:6px;border-radius:8px;border:1px solid var(--ln);background:var(--card);color:var(--tx);max-width:100%}
+#map{height:46vh;min-height:280px;margin:0 14px 8px;border-radius:14px;z-index:0}
+.mk{background:var(--card);color:var(--tx);border-radius:8px;padding:1px 6px;font:600 12px system-ui,sans-serif;white-space:nowrap;box-shadow:0 1px 3px #0005;transform:translate(-50%,-50%)}.mk.neg{color:var(--ac)}
+.det{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}.det div{background:var(--bg);border-radius:10px;padding:6px 8px}.det b{display:block;font-size:15px}
+.wk{padding:8px 0;border-top:1px solid var(--ln);cursor:pointer}.wk:first-child{border:0}#days button{padding:4px 10px;white-space:nowrap;flex:none}
+#err{margin:20px 14px;color:#c0392b}footer{color:var(--mu);font-size:12px;margin:16px 14px 24px}
+</style></head><body>
+<header>
+ <h1>⛰️ Tatry · Pogoda</h1>
+ <div class="row"><span id="when">Ładowanie…</span><span><button id="now">Teraz</button> <button id="p6">+6 h</button></span></div>
+ <input id="tm" type="range" min="0" max="71" value="0">
+ <div id="days" style="display:flex;gap:6px;overflow-x:auto;padding-top:6px"></div>
+</header>
+<div id="err"></div>
+<div id="app" hidden>
+ <div id="map"></div><div class="sm" style="margin:0 14px 8px">Dotknij mapy lub szczytu, aby zobaczyć pogodę w tym miejscu.</div>
+ <h2>Wybrany punkt</h2><div class="card" id="sel">…</div>
+ <h2>Czy to dobry dzień w góry?</h2><div class="card" id="hike"></div>
+ <h2>Chmury i inwersja w tym miejscu</h2><div class="card" id="sky"></div>
+ <h2>Prognoza na 7 dni</h2><div class="card" id="week"></div>
+ <h2 id="sh">Wschody i zachody słońca</h2>
+ <div id="sun"></div>
+ <h2>Temperatura na szczytach</h2><div id="peaks"></div>
+ <h2>Temperatura na wybranej wysokości</h2>
+ <div class="card"><div class="row"><span class="t" id="ct">—</span><span id="ch" style="font-weight:600"></span></div>
+ <input id="alt" type="range" min="700" max="2700" step="50" value="1500"><div class="sm">Interpolacja z danych modelu na poziomach ciśnienia</div></div>
+ <h2>Chmury</h2>
+ <div class="card"><div class="grid" id="cov"></div></div>
+ <div class="card"><b>Podstawa chmur:</b> <span id="base">—</span><div class="sm" id="fz"></div></div>
+ <div class="card" id="types"></div>
+ <h2>Profil pionowy atmosfery</h2><div class="card" id="prof"></div>
+</div>
+<footer>Dane: Open-Meteo (modele numeryczne, rozdzielczość kilku km). Prognoza górska jest orientacyjna – przed wyjściem sprawdź komunikaty TOPR (topr.pl).</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const PEAKS=[
+{n:'Kasprowy Wierch',e:1987,la:49.2319,lo:19.9817},{n:'Gerlach',e:2655,la:49.1641,lo:20.0841},
+{n:'Łomnica',e:2634,la:49.1953,lo:20.2133},{n:'Rysy',e:2499,la:49.1795,lo:20.0881},
+{n:'Krywań',e:2494,la:49.1658,lo:19.9995},{n:'Świnica',e:2301,la:49.2194,lo:20.0092},
+{n:'Kościelec',e:2155,la:49.2339,lo:20.0136},{n:'Giewont',e:1894,la:49.2514,lo:19.9340},
+{n:'Morskie Oko',e:1395,la:49.1977,lo:20.0705},{n:'Zakopane',e:838,la:49.2992,lo:19.9496}];
+const LV=[950,925,900,850,800,700,600,500,400,300];
+const H=['temperature_2m','wind_speed_10m','wind_gusts_10m','cloud_cover','cloud_cover_low','cloud_cover_mid','cloud_cover_high','cape','freezing_level_height','visibility','precipitation',
+ ...LV.flatMap(l=>['temperature_'+l+'hPa','geopotential_height_'+l+'hPa','cloud_cover_'+l+'hPa'])].join(',');
+const HB='temperature_2m,wind_speed_10m,wind_gusts_10m';
+const HQ=H+',apparent_temperature,relative_humidity_2m,dew_point_2m,pressure_msl,precipitation_probability,snowfall,snow_depth,weather_code,wind_direction_10m,uv_index,is_day,sunshine_duration';
+const $=id=>document.getElementById(id);
+const f=(v,d=0)=>v==null?'—':(+v).toFixed(d).replace(/^-0(\.0+)?$/,'0');
+let D,T,P,NOW,Q,MAP,MK=[],SM;const BASE=700;
+function interp(xs,ys,x){ // xs rosnące
+ if(!xs.length)return null;if(x<=xs[0])return ys[0];if(x>=xs[xs.length-1])return ys[ys.length-1];
+ for(let k=1;k<xs.length;k++)if(x<=xs[k]){const r=(x-xs[k-1])/(xs[k]-xs[k-1]);return ys[k-1]+r*(ys[k]-ys[k-1])}}
+async function load(){
+ try{
+  const u='https://api.open-meteo.com/v1/forecast?latitude='+PEAKS.map(p=>p.la)+'&longitude='+PEAKS.map(p=>p.lo)+
+   '&elevation='+PEAKS.map(p=>p.e)+'&hourly='+HB+'&timezone=Europe%2FWarsaw&forecast_days=7&wind_speed_unit=kmh';
+  const r=await fetch(u);if(!r.ok)throw new Error('HTTP '+r.status);
+  D=await r.json();if(!Array.isArray(D))D=[D];
+  T=D[0].hourly.time;
+  const n=new Date().toLocaleString('sv-SE',{timeZone:'Europe/Warsaw'}).slice(0,13).replace(' ','T')+':00';
+  $('days').innerHTML=[...new Set(T.map(x=>x.slice(0,10)))].map((d,k)=>`<button data-d="${d}">${k?new Date(d+'T12:00').toLocaleDateString('pl-PL',{weekday:'short',day:'numeric'}):'Dziś'}</button>`).join('');
+  $('days').onclick=e=>{const d=e.target.dataset.d;if(!d)return;const j=T.indexOf(d+'T'+(d==NOW.slice(0,10)?NOW.slice(11,13):'12')+':00');$('tm').value=j<0?0:j;render()};
+  NOW=n;const i=Math.max(0,T.indexOf(n));$('tm').max=T.length-1;$('tm').value=i;$('now').dataset.i=i;
+  $('err').textContent='';$('app').hidden=false;initMap();await selPt(PEAKS[0].la,PEAKS[0].lo,PEAKS[0].n,PEAKS[0].e);
+ }catch(e){$('err').innerHTML='Nie udało się pobrać danych ('+e.message+'). Sprawdź internet. <button onclick="load()">Spróbuj ponownie</button>';$('when').textContent=''}}
+function types(h,i){
+ const lo=h.cloud_cover_low[i],mi=h.cloud_cover_mid[i],hi=h.cloud_cover_high[i],cape=h.cape[i]||0,o=[];
+ if(lo>=10)o.push(cape>1500&&lo>40?['Cumulonimbus (Cb)','kłębiaste deszczowe – ryzyko burz',lo,'niskie, podstawa do ~2 km']:
+  cape>300?['Cumulus (Cu)','kłębiaste, konwekcyjne',lo,'niskie, do ~2 km']:['Stratus / Stratocumulus (St/Sc)','warstwowe, często mgła w dolinach i na grzbietach',lo,'niskie, do ~2 km']);
+ if(mi>=10)o.push(cape>100?['Altocumulus (Ac)','średnie, kłębiaste',mi,'średnie, 2–6 km']:['Altostratus (As)','średnie, jednolita warstwa',mi,'średnie, 2–6 km']);
+ if(hi>=10)o.push(hi>=60?['Cirrostratus (Cs)','wysokie, welon – halo wokół słońca',hi,'wysokie, >6 km']:['Cirrus (Ci)','wysokie, pierzaste',hi,'wysokie, >6 km']);
+ return o}
+function render(){
+ const i=+$('tm').value,d=new Date(T[i]);
+ $('when').textContent=d.toLocaleDateString('pl-PL',{weekday:'short',day:'numeric',month:'numeric'})+', '+T[i].slice(11,16);
+ const h0=Q.hourly;
+ P=lev(i);
+ const hs=P.map(p=>p.h),cs=P.map(p=>p.c??0);
+ $('peaks').innerHTML=PEAKS.map((p,k)=>({p,h:D[k].hourly})).sort((a,b)=>b.p.e-a.p.e).map(({p,h})=>{
+  const t=h.temperature_2m[i],c=interp(hs,cs,p.e),inC=c!=null&&c>=50;
+  return `<div class="card pk" style="cursor:pointer" onclick="sel(${PEAKS.indexOf(p)});scrollTo({top:0,behavior:'smooth'})"><div><b>${p.n}</b><span class="badge">${p.e} m</span><div class="sm">wiatr ${f(h.wind_speed_10m[i])} km/h (porywy ${f(h.wind_gusts_10m[i])})<br>chmury na tej wysokości: ${f(c)}%${inC?' ☁️ <b>w chmurach</b>':''}</div></div><div class="t ${t<0?'neg':''}">${f(t,1)}°</div></div>`}).join('');
+ renderAlt();
+ const cov=[['Całkowite',h0.cloud_cover[i]],['Niskie',h0.cloud_cover_low[i]],['Średnie',h0.cloud_cover_mid[i]],['Wysokie',h0.cloud_cover_high[i]]];
+ $('cov').style.gridTemplateColumns='repeat(4,1fr)';
+ $('cov').innerHTML=cov.map(([n,v])=>`<div><b>${f(v)}%</b><span class="sm">${n}</span></div>`).join('');
+ const b=P.find(p=>p.c>=25);
+ $('base').innerHTML=b?`ok. <b>${f(b.h,-1>0?0:0)} m n.p.m.</b> (${f(b.c)}%, ${b.h<Q.elevation?'pod Tobą':'nad Tobą'})`:'brak chmur w warstwie '+f(hs[0])+'–'+f(hs[hs.length-1])+' m';
+ const fz=h0.freezing_level_height[i];$('fz').textContent=fz==null?'':'Izoterma 0°C na wysokości ok. '+f(fz,-1>0?0:0)+' m n.p.m.';
+ const ty=types(h0,i);
+ $('types').innerHTML='<b>Rodzaje chmur</b>'+(ty.length?ty.map(([n,ds,v,l])=>`<div class="ty"><div class="row"><b>${n}</b><b>${f(v)}%</b></div><div class="bar"><i style="width:${v}%"></i></div><div class="sm">${ds} · ${l}</div></div>`).join(''):'<div class="sm">Niebo bezchmurne lub zachmurzenie poniżej 10%.</div>');
+ $('prof').innerHTML=prof(i);detail(i);hikeCard(i);skyCard(i);mapUp(i)}
+function renderAlt(){
+ const a=+$('alt').value;$('ch').textContent=a+' m n.p.m.';
+ const t=interp(P.map(p=>p.h),P.map(p=>p.t),a);const c=t==null?null:interp(P.map(p=>p.h),P.map(p=>p.c??0),a);
+ $('ct').innerHTML=t==null?'—':`<span class="${t<0?'neg':''}">${f(t,1)}°C</span> <span class="sm">chmury ${f(c)}%</span>`}
+// Ocena „płonącego nieba” 0–100 dla godziny i, widzianego z wysokości obs
+function S(i,obs){
+ const h=Q.hourly,hi=h.cloud_cover_high[i]??0,mi=h.cloud_cover_mid[i]??0,pr=h.precipitation[i]||0,vis=h.visibility[i];
+ const lv=LV.map(l=>({h:h['geopotential_height_'+l+'hPa'][i],c:h['cloud_cover_'+l+'hPa'][i]??0})).filter(p=>p.h!=null).sort((a,b)=>a.h-b.h);
+ const hs=lv.map(p=>p.h),cs=lv.map(p=>p.c),at=x=>interp(hs,cs,x)??0;
+ const blk=Math.max(at(obs-200),at(obs),at(obs+300)),below=Math.min(at(obs-400),at(obs-800));
+ const ec=1-(1-hi/100)*(1-mi/100),can=Math.max(0,1-Math.abs(ec-.5)/.5);
+ const lf=Math.max(0,Math.min(1,1-(blk-25)/55)),vf=vis==null?1:.6+.4*Math.min(1,vis/30000),pf=pr>.1?.3:1;
+ const sea=obs>=1000&&below>=70&&blk<30,why=[];
+ let s=100*(.15+.85*can)*lf*vf*pf;
+ if(sea){s=Math.min(100,Math.max(s,55)+15)*vf*pf}
+ if(ec<.1)why.push('niebo prawie bezchmurne – mało barw');
+ else if(ec<=.75&&ec>=.25)why.push('chmury średnie/wysokie ('+f(ec*100)+'%) – dobre „płótno” dla barw');
+ else if(ec>.75)why.push('zbyt gęste chmury – światło nie przebije');
+ else why.push('niewielkie chmury średnie/wysokie ('+f(ec*100)+'%)');
+ if(blk>=50)why.push('chmury na Twojej wysokości zasłonią horyzont');
+ if(sea)why.push('morze chmur poniżej – widok ponad chmurami');
+ if(pr>.1)why.push('opady');
+ if(vis!=null&&vis<10000)why.push('słaba widoczność');
+ return{s,why}}
+function ev(iso,obs){
+ const k=T.indexOf(iso.slice(0,13)+':00');if(k<0)return null;
+ const m=+iso.slice(14,16)/60,a=S(k,obs),b=S(Math.min(k+1,T.length-1),obs);
+ return{i:m>=.5?Math.min(k+1,T.length-1):k,s:Math.round(a.s*(1-m)+b.s*m)||0,why:(m<.5?a:b).why}}
+function go(i){$('tm').value=i;render();scrollTo({top:0,behavior:'smooth'})}
+function renderSun(){
+ const obs=Q.elevation,dl=Q.daily,E=[];$('sh').textContent='Wschody i zachody · '+Q.name;
+ dl.time.forEach((_,d)=>[['sunrise','🌅','Wschód'],['sunset','🌇','Zachód']].forEach(([k,ic,nm])=>{
+  const iso=dl[k][d];if(!iso||iso.slice(0,13)<NOW.slice(0,13))return;
+  const r=ev(iso,obs);if(r)E.push({...r,iso,ic,nm})}));
+ E.sort((a,b)=>a.iso<b.iso?-1:1);
+ const best=E.reduce((a,b)=>!a||b.s>a.s?b:a,null);
+ const lab=s=>s>=70?['Wybitny','#e8590c']:s>=50?['Dobry','#f59f00']:s>=30?['Przeciętny','#7b8794']:['Słaby','#9aa5b1'];
+ const L=E;
+ $('sun').innerHTML=L.map(e=>{const[l,c]=lab(e.s),d=new Date(e.iso).toLocaleDateString('pl-PL',{weekday:'short',day:'numeric',month:'numeric'});
+  if(e.s<40)return `<div class="card sm" style="padding:6px 14px">${e.ic} ${e.nm} · ${d}, ${e.iso.slice(11,16)} — <b>${e.s}</b> ${l}</div>`;
+  const w=e.nm=='Wschód'?'kolor szukaj ok. 40 min przed do 10 min po':'kolor szukaj ok. 10 min przed do 40 min po';
+  return `<div class="card ev ${e===best&&e.s>=50?'top':''}"><div class="sc" style="background:${c}">${e.s}<small>${l}</small></div>
+  <div style="flex:1"><b>${e.ic} ${e.nm} · ${d}, ${e.iso.slice(11,16)}</b>${e===best&&e.s>=50?'<span class="badge">najlepsza okazja</span>':''}
+  <div class="sm">${e.why.join(' · ')}<br>${w}</div><button style="margin-top:6px" onclick="go(${e.i})">Pokaż warunki</button></div></div>`}).join('')+
+  '<div class="sm" style="margin:0 14px">Lista obejmuje 7 dni; słabsze wschody i zachody (poniżej 40/100) są pokazane skrótowo. Ocena to prawdopodobieństwo, nie gwarancja: model nie widzi chmur tuż nad horyzontem, od którego zależy końcowy efekt.</div>'}
+const WC={0:'bezchmurnie',1:'prawie bezchmurnie',2:'częściowe zachmurzenie',3:'pochmurno',45:'mgła',48:'mgła szronowa',51:'słaba mżawka',53:'mżawka',55:'silna mżawka',56:'marznąca mżawka',57:'marznąca mżawka',61:'słaby deszcz',63:'deszcz',65:'silny deszcz',66:'marznący deszcz',67:'marznący deszcz',71:'słaby śnieg',73:'śnieg',75:'silny śnieg',77:'ziarna śniegu',80:'przelotny deszcz',81:'przelotny deszcz',82:'ulewy',85:'przelotny śnieg',86:'silny przelotny śnieg',95:'burza',96:'burza z gradem',99:'burza z silnym gradem'};
+async function selPt(la,lo,name,el){
+ $('sel').textContent='Ładowanie…';
+ try{
+  const u='https://api.open-meteo.com/v1/forecast?latitude='+la+'&longitude='+lo+(el!=null?'&elevation='+el:'')+'&hourly='+HQ+'&daily=sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_gusts_10m_max,sunshine_duration,daylight_duration&timezone=Europe%2FWarsaw&forecast_days=7&wind_speed_unit=kmh';
+  const r=await fetch(u),q=await r.json();if(q.error)throw new Error(q.reason||'błąd API');
+  Q=q;Q.name=name;Q.la=la;Q.lo=lo;render();renderSun();week();
+ }catch(e){$('sel').innerHTML='Nie udało się pobrać danych ('+e.message+').'}}
+const sel=k=>selPt(PEAKS[k].la,PEAKS[k].lo,PEAKS[k].n,PEAKS[k].e);
+function detail(i){
+ const h=Q.hourly,g=k=>h[k]?h[k][i]:null,u=(k,s,d=0,m=1)=>{const v=g(k);return v==null?'—':f(v*m,d)+s};
+ const t=g('temperature_2m'),td=g('dew_point_2m'),cape=g('cape')||0,wd=g('wind_direction_10m');
+ const dir=wd==null?'':['N','NE','E','SE','S','SW','W','NW'][Math.round(wd/45)%8]+' ';
+ const lcl=t!=null&&td!=null?Q.elevation+125*(t-td):null;
+ const R=[['🌡️ Odczuwalna',u('apparent_temperature','°C',1)],['💧 Wilgotność',u('relative_humidity_2m','%')],['🌫️ Punkt rosy',u('dew_point_2m','°C',1)],['🧭 Ciśnienie (n.p.m.)',u('pressure_msl',' hPa')],
+ ['💨 Wiatr',u('wind_speed_10m',' km/h')+(wd==null?'':' '+dir+f(wd)+'°')],['🌬️ Porywy',u('wind_gusts_10m',' km/h')],['🌧️ Opad',u('precipitation',' mm',1)+' · '+u('precipitation_probability','%')],
+ ['❄️ Śnieg',u('snowfall',' cm',1)+' · pokrywa '+u('snow_depth',' cm',0,100)],['👁️ Widoczność',u('visibility',' km',1,.001)],['☀️ Indeks UV',u('uv_index','',1)],
+ ['🧊 Izoterma 0°C',u('freezing_level_height',' m')],['⛈️ Burze (CAPE)',f(cape)+' J/kg · '+(cape<300?'małe':cape<1000?'umiarkowane':'duże')+' ryzyko'],
+ ['☁️ Chmury łącznie',u('cloud_cover','%')],['☁️ Podstawa z wilgotności',lcl==null?'—':'ok. '+f(lcl)+' m']];
+ $('sel').innerHTML=`<div class="row"><div><b>${Q.name}</b><div class="sm">${f(Q.elevation)} m n.p.m. · ${WC[g('weather_code')]||'—'}</div></div><div class="t ${t<0?'neg':''}">${f(t,1)}°</div></div><div class="det">${R.map(([a,b])=>`<div><span class="sm">${a}</span><b>${b}</b></div>`).join('')}</div>`}
+function initMap(){
+ if(!window.L||MAP)return;
+ MAP=L.map('map').setView([49.23,20.0],11);
+ L.tileLayer('https://tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17,attribution:'© OpenTopoMap, © OSM'}).addTo(MAP);
+ MK=PEAKS.map((p,k)=>L.marker([p.la,p.lo],{icon:L.divIcon({className:'',html:''})}).addTo(MAP).on('click',e=>{L.DomEvent.stopPropagation(e);sel(k)}));
+ SM=L.circleMarker([49.23,20],{radius:10,color:'#e8590c',weight:3,fillOpacity:.15,interactive:false}).addTo(MAP);
+ MAP.on('click',e=>selPt(e.latlng.lat,e.latlng.lng,'Punkt '+e.latlng.lat.toFixed(3)+', '+e.latlng.lng.toFixed(3)));
+ setTimeout(()=>MAP.invalidateSize(),300)}
+function mapUp(i){
+ if(!MAP)return;
+ MK.forEach((m,k)=>{const t=D[k].hourly.temperature_2m[i];m.setIcon(L.divIcon({className:'',iconSize:null,html:`<div class="mk${t<0?' neg':''}">${PEAKS[k].n.split(' ')[0]} ${f(t)}°</div>`}))});
+ SM.setLatLng([Q.la,Q.lo])}
+function lev(i){const h=Q.hourly;return LV.map(l=>({l,h:h['geopotential_height_'+l+'hPa'][i],t:h['temperature_'+l+'hPa'][i],c:h['cloud_cover_'+l+'hPa'][i]})).filter(p=>p.h!=null&&p.t!=null&&p.h>=BASE).sort((a,b)=>a.h-b.h)}
+function ctype(p,cape){const c=p.c??0;if(c<10)return'bez chmur';
+ if(p.l>=800)return cape>1500&&c>40?'Cumulonimbus (Cb)':cape>300?'Cumulus (Cu)':c>=70?'Stratus (St)':'Stratocumulus (Sc)';
+ if(p.l>=450)return cape>100?'Altocumulus (Ac)':'Altostratus (As)';
+ return c>=60?'Cirrostratus (Cs)':'Cirrus (Ci)'}
+function an(i){
+ const L=lev(i),E=Q.elevation,t2=Q.hourly.temperature_2m[i];
+ if(L.length<3||L.every(p=>p.c==null))return null;
+ const at=x=>interp(L.map(p=>p.h),L.map(p=>p.c??0),x),mx=a=>a.reduce((m,p)=>!m||p.c>m.c?p:m,null);
+ const bl=mx(L.filter(p=>p.h<E-150)),ab=mx(L.filter(p=>p.h>E+150)),here=at(E);
+ const st=here>=60?'in':bl&&bl.c>=60?'over':ab&&ab.c>=60?'under':'clear';
+ const pts=[...L.map(p=>({h:p.h,t:p.t})),{h:E,t:t2}].filter(p=>p.t!=null).sort((a,b)=>a.h-b.h);let inv=null;
+ for(let k=1;k<pts.length;k++){const d=pts[k].t-pts[k-1].t;if(d>.5&&(!inv||d>inv.d))inv={d,b:pts[k-1].h,u:pts[k].h}}
+ return{st,bl,ab,inv,E}}
+function skyCard(i){
+ const a=an(i);if(!a){$('sky').innerHTML='<div class="sm">Brak danych o chmurach na poziomach dla tej godziny.</div>';return}
+ const m={in:['☁️','W chmurach','jesteś wewnątrz warstwy chmur – mgła i brak widoczności'],over:['🏔️','Nad chmurami','morze chmur pod Tobą – warstwa ok. '+f(a.bl&&a.bl.h)+' m n.p.m. ('+f(a.bl&&a.bl.c)+'%)'],
+  under:['🌥️','Pod chmurami','warstwa chmur nad Tobą, ok. '+f(a.ab&&a.ab.h)+' m n.p.m. ('+f(a.ab&&a.ab.c)+'%)'],clear:['🌤️','Bez zwartej warstwy chmur','brak gęstych chmur pod Tobą, na Twojej wysokości i nad Tobą']}[a.st];
+ let inv='🌡️ <b>Inwersja:</b> nie wykryto (temperatura maleje z wysokością).';
+ if(a.inv){const v=a.inv,E=a.E;inv=`🌡️ <b>Inwersja:</b> od ok. ${f(v.b)} do ${f(v.u)} m, temperatura rośnie o ${f(v.d,1)}°C. `+(E<v.b?'Jesteś pod nią – zimne powietrze zalega w dolinie.':E>v.u?'Jesteś nad nią – cieplej niż w dolinie.':'Jesteś w jej warstwie.')+(a.st=='over'?' Typowe morze chmur pod pokrywą inwersji.':'')}
+ $('sky').innerHTML=`<b style="font-size:18px">${m[0]} ${m[1]}</b><div class="sm">${m[2]}</div><div style="margin-top:8px">${inv}</div><div class="sm" style="margin-top:6px">Szacunek z poziomów ciśnienia (co ~500–1500 m) – cienkich warstw model nie widzi.</div>`}
+function prof(i){
+ const E=Q.elevation,cape=Q.hourly.cape[i]||0,rows=[...P,{obs:1,h:E,t:Q.hourly.temperature_2m[i]}].sort((a,b)=>b.h-a.h);
+ return rows.map(p=>p.obs?`<div class="lv" style="background:var(--bg);border-radius:8px"><b>📍 ${f(E)} m</b><span class="${p.t<0?'neg':''}">${f(p.t,1)}°C</span><span class="sm" style="grid-column:3/5">tu jesteś</span></div>`:
+  `<div class="lv"><b>${f(p.h)} m</b><span class="${p.t<0?'neg':''}">${f(p.t,1)}°C</span><div><div class="bar"><i style="width:${p.c??0}%"></i></div><span class="sm">${p.c==null?'brak danych':ctype(p,cape)} · ${p.h<E?'↓ pod Tobą':'↑ nad Tobą'}</span></div><span>${f(p.c)}%</span></div>`).join('')+'<div class="sm" style="margin-top:6px">wysokość · temperatura · zachmurzenie i rodzaj chmur na danym poziomie</div>'}
+const IC=c=>c<=1?'☀️':c==2?'⛅':c==3?'☁️':c<=48?'🌫️':c<=57?'🌦️':c<=67?'🌧️':c<=77?'🌨️':c<=82?'🌦️':c<=86?'🌨️':'⛈️';
+function week(){
+ const dl=Q.daily;
+ $('week').innerHTML=dl.time.map((d,k)=>{
+  let ov=0,iv=0;for(let hh=0;hh<24;hh++){const i=T.indexOf(d+'T'+String(hh).padStart(2,'0')+':00');if(i<0)continue;const a=an(i);if(!a)continue;if(hh>=6&&hh<=20&&a.st=='over')ov++;if(a.inv)iv++}
+  const dn=new Date(d+'T12:00').toLocaleDateString('pl-PL',{weekday:'short',day:'numeric',month:'numeric'}),j=T.indexOf(d+'T12:00'),di=dayInfo(d,k);
+  return `<div class="wk" onclick="go(${j<0?0:j})"><div class="row"><b>${dn} ${IC(dl.weather_code[k])}</b><b>${f(dl.temperature_2m_max[k])}° / <span class="neg">${f(dl.temperature_2m_min[k])}°</span></b></div>
+  <div class="sm">opad ${f(dl.precipitation_sum[k],1)} mm · porywy ${f(dl.wind_gusts_10m_max[k])} km/h${ov>=3?' · 🏔️ nad chmurami ~'+ov+' h':''}${iv>=3?' · 🌡️ inwersja ~'+iv+' h':''}</div>${di?dayLine(di):''}</div>`}).join('')}
+// Ocena warunków do chodzenia po górach 0–100
+function hike(i){
+ const h=Q.hourly,g=k=>h[k]?h[k][i]:null,E=Q.elevation,why=[];let s=100;
+ const p=g('precipitation')||0,gu=g('wind_gusts_10m')||0,at=g('apparent_temperature'),t=g('temperature_2m'),vis=g('visibility'),cape=g('cape')||0,sn=g('snowfall')||0,sd=g('snow_depth')||0;
+ const sub=(n,m)=>{s-=n;why.push(m)};
+ if(p>2)sub(50,'silny opad');else if(p>1)sub(35,'opady');else if(p>.1)sub(15,'słaby opad');
+ if(gu>80)sub(60,'huraganowe porywy '+f(gu)+' km/h');else if(gu>60)sub(35,'bardzo silne porywy '+f(gu)+' km/h');else if(gu>40)sub(15,'silne porywy '+f(gu)+' km/h');
+ if(at!=null){if(at<-15)sub(35,'ekstremalny mróz (odczuwalna '+f(at)+'°C)');else if(at<-8)sub(20,'duży mróz');else if(at<-3)sub(8,'mróz');else if(at>28)sub(15,'upał')}
+ if(vis!=null){if(vis<1000)sub(35,'widoczność poniżej 1 km');else if(vis<5000)sub(15,'ograniczona widoczność')}
+ const a=an(i);if(a&&a.st=='in')sub(20,'jesteś w chmurze – mgła');
+ if(cape>1000)sub(40,'duże ryzyko burzy');else if(cape>300)sub(12,'możliwe burze');
+ if(sn>.1)sub(15,'opad śniegu');
+ if(t!=null&&t<=0&&(p>.1||sd>.02))sub(10,'śnieg/oblodzenie na szlaku');
+ const night=g('is_day')===0;if(night){s=Math.min(s,25);why.unshift('noc')}
+ return{s:Math.max(0,Math.round(s)),why,night,sun:g('sunshine_duration')==null?null:g('sunshine_duration')/3600}}
+const HL=s=>s>=75?['Świetne','#2f9e44']:s>=55?['Dobre','#74b816']:s>=35?['Trudne','#f59f00']:['Odradzane','#e03131'];
+function dayInfo(d,k){
+ const day=[];for(let hh=0;hh<24;hh++){const i=T.indexOf(d+'T'+String(hh).padStart(2,'0')+':00');if(i>=0&&Q.hourly.is_day[i]===1)day.push({hh,i,...hike(i)})}
+ if(!day.length)return null;
+ let best=null,cur=null;
+ day.forEach(x=>{if(x.s>=55){if(cur&&x.hh==cur.e+1)cur.e=x.hh;else cur={b:x.hh,e:x.hh};if(!best||cur.e-cur.b>best.e-best.b)best={...cur}}else cur=null});
+ const st=day.find(x=>(Q.hourly.cape[x.i]||0)>1000),dd=Q.daily;
+ return{avg:Math.round(day.reduce((a,x)=>a+x.s,0)/day.length),best,storm:st?st.hh:null,
+  sun:dd.sunshine_duration?dd.sunshine_duration[k]/3600:null,dl:dd.daylight_duration?dd.daylight_duration[k]/3600:null}}
+const sunTxt=(di,sh)=>{const fr=di.sun!=null&&di.dl?di.sun/di.dl:null;return fr==null?'':fr>=.6?(sh?'☀️ słonecznie':'☀️ Dzień słoneczny'):fr>=.3?(sh?'🌤️ cz. słonecznie':'🌤️ Dzień częściowo słoneczny'):(sh?'☁️ pochmurnie':'☁️ Dzień pochmurny')};
+const dayLine=di=>{const[l,c]=HL(di.avg);return `<div style="margin-top:3px;font-size:13px"><span style="color:${c};font-weight:700">🥾 ${l} ${di.avg}</span> · ${sunTxt(di,1)}${di.sun!=null?' ('+f(di.sun,1)+' h)':''}${di.best?' · okno '+di.best.b+'–'+(di.best.e+1)+'h':''}${di.storm!=null?' · ⛈️ od '+di.storm+'h':''}</div>`};
+function hikeCard(i){
+ const x=hike(i),[l,c]=HL(x.s),d=T[i].slice(0,10),k=Q.daily.time.indexOf(d),di=k<0?null:dayInfo(d,k);
+ let day='';
+ if(di)day=`<div style="margin-top:8px"><b>${sunTxt(di,0)}</b>${di.sun!=null?' · '+f(di.sun,1)+' h słońca z '+f(di.dl,1)+' h':''}<br>🥾 Cały dzień: <b>${HL(di.avg)[0]}</b> (${di.avg}/100)${di.best?' · najlepsze okno '+di.best.b+':00–'+(di.best.e+1)+':00':' · brak dobrego okna'}${di.storm!=null?'<br>⛈️ ryzyko burzy od ok. '+di.storm+':00 – planuj powrót wcześniej':''}</div>`;
+ $('hike').innerHTML=`<div class="ev"><div class="sc" style="background:${c}">${x.s}<small>${l}</small></div><div style="flex:1"><b>${T[i].slice(11,16)}: ${x.night?'🌙 noc':x.sun==null?'':x.sun>=.6?'☀️ słonecznie':x.sun>=.2?'🌤️ trochę słońca':'☁️ bez słońca'}</b><div class="sm">${x.why.length?x.why.join(' · '):'brak wyraźnych utrudnień'}</div></div></div>${day}<div class="sm" style="margin-top:6px">Ocena orientacyjna (opady, wiatr, mróz, widoczność, burze). Nie uwzględnia lawin, stanu szlaku ani Twoich umiejętności – sprawdź komunikat TOPR (zimą także lawinowy).</div>`}
+$('tm').oninput=render;$('alt').oninput=renderAlt;
+$('now').onclick=()=>{$('tm').value=$('now').dataset.i;render()};
+$('p6').onclick=()=>{$('tm').value=Math.min(+$('tm').max,+$('tm').value+6);render()};
+load();
+</script></body></html>
